@@ -2,13 +2,13 @@ import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 // Props 타입 정의 (TypeScript 사용 시)
-interface ScanItemRowProps {
+interface Item_list {
   index: number | string;
   name: string;
   count: number | string;
 }
 
-export default function ScanItemRow({ index, name, count }: ScanItemRowProps) {
+export default function Item_list({ index, name, count }: Item_list) {
   return (
     <View style={styles.container}>
       {/* 1. 순번 (Prop) */}
