@@ -19,7 +19,18 @@ export default function InventorySurveyScreen() {
   const [isMerge, setIsMerge] = useState(false);
 
   // 샘플 스캔 항목 데이터 일단 가짜
-  const [scannedItems, setScannedItems] = useState([]);
+  const [scannedItems, setScannedItems] = useState([
+    { id: 1, name: "Item 1", count: 2 },
+    { id: 2, name: "Item 2", count: 1 },
+    { id: 3, name: "Item 3", count: 5 },
+    { id: 4, name: "Item 4", count: 3 },
+    { id: 5, name: "Item 5", count: 4 },
+    { id: 6, name: "Item 6", count: 2 },
+    { id: 7, name: "Item 7", count: 6 },
+    { id: 8, name: "Item 8", count: 1 },
+    { id: 9, name: "Item 9", count: 7 },
+    { id: 10, name: "Item 10", count: 2 },
+  ]);
 
   const scan_count = scannedItems.length;
 
@@ -147,7 +158,7 @@ const styles = StyleSheet.create({
     justifyContent: "center", // 가로 중앙 정렬 (제목을 위해)
     flexDirection: "row", // 가로 배치
     position: "relative", // 자식요소(버튼)의 절대 위치 기준점
-    height: 60, // 헤더 높이 고정 (선택사항, 레이아웃 안정됨)
+    height: 50, // 헤더 높이 고정 (선택사항, 레이아웃 안정됨)
   },
   headerTitle: { color: "white", fontSize: 18, fontWeight: "bold" },
 

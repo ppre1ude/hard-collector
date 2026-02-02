@@ -88,7 +88,12 @@ export default function SurveyManagementScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fff" },
-  header: { backgroundColor: "#4F7327", padding: 15, alignItems: "center" },
+  header: {
+    backgroundColor: "#4F7327",
+    padding: 15,
+    alignItems: "center",
+    height: 50,
+  },
   headerTitle: { color: "white", fontSize: 18, fontWeight: "bold" },
 
   listHeaderContainer: {
