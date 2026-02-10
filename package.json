@@ -19,13 +19,19 @@
     "expo-blur": "~14.1.5",
     "expo-checkbox": "~4.1.4",
     "expo-constants": "~17.1.7",
+<<<<<<< HEAD
     "expo-file-system": "~18.1.11",
+=======
+>>>>>>> ddb4294707be2160592f87e16dc590f3a65e7847
     "expo-font": "~13.3.2",
     "expo-haptics": "~14.1.4",
     "expo-image": "~2.3.2",
     "expo-linking": "~7.1.7",
     "expo-router": "~5.1.3",
+<<<<<<< HEAD
     "expo-sharing": "~13.1.5",
+=======
+>>>>>>> ddb4294707be2160592f87e16dc590f3a65e7847
     "expo-splash-screen": "~0.30.10",
     "expo-status-bar": "~2.2.3",
     "expo-symbols": "~0.4.5",

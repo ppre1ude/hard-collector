@@ -1,8 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+<<<<<<< HEAD
 import React, { useMemo, useState } from "react";
 import {
   Alert,
+=======
+import React, { useState } from "react";
+import {
+>>>>>>> ddb4294707be2160592f87e16dc590f3a65e7847
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -12,14 +17,18 @@ import {
   View,
 } from "react-native";
 
+<<<<<<< HEAD
 // Expo 파일 시스템 및 공유 모듈
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
 
+=======
+>>>>>>> ddb4294707be2160592f87e16dc590f3a65e7847
 import Item_list from "@/components/Item_list";
 
 export default function InventorySurveyScreen() {
   const router = useRouter();
+<<<<<<< HEAD
 
   // 1. 체크박스 상태 (병합 여부)
   const [isMerge, setIsMerge] = useState(false);
@@ -131,6 +140,30 @@ export default function InventorySurveyScreen() {
       Alert.alert("알림", "내보내기 중 오류가 발생했습니다.");
     }
   };
+=======
+  // 체크박스 상태 관리 (true = 체크됨, false = 해제됨)
+  const [isMerge, setIsMerge] = useState(false);
+
+  // 샘플 스캔 항목 데이터 일단 가짜
+  const [scannedItems, setScannedItems] = useState([
+    { id: 1, name: "Item 1", count: 2 },
+    { id: 2, name: "Item 2", count: 1 },
+    { id: 3, name: "Item 3", count: 5 },
+    { id: 4, name: "Item 4", count: 3 },
+    { id: 5, name: "Item 5", count: 4 },
+    { id: 6, name: "Item 6", count: 2 },
+    { id: 7, name: "Item 7", count: 6 },
+    { id: 8, name: "Item 8", count: 1 },
+    { id: 9, name: "Item 9", count: 7 },
+    { id: 10, name: "Item 10", count: 2 },
+  ]);
+
+  const scan_count = scannedItems.length;
+
+  const total_count = scannedItems
+    .map((item) => item.count)
+    .reduce((a, b) => a + b, 0);
+>>>>>>> ddb4294707be2160592f87e16dc590f3a65e7847
 
   return (
     <SafeAreaView style={styles.container}>
@@ -138,7 +171,11 @@ export default function InventorySurveyScreen() {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
+<<<<<<< HEAD
           onPress={() => router.back()} // ✅ push 대신 back 사용 (네비게이션 꼬임 방지)
+=======
+          onPress={() => router.push("/SurveyManagement")}
+>>>>>>> ddb4294707be2160592f87e16dc590f3a65e7847
         >
           <Ionicons name="chevron-back" size={28} color="white" />
         </TouchableOpacity>
@@ -150,6 +187,7 @@ export default function InventorySurveyScreen() {
         <View style={styles.row}>
           <View style={styles.inputGroup}>
             <Text style={styles.label}>파일</Text>
+<<<<<<< HEAD
             <TextInput
               style={styles.input}
               placeholder="미입력시날짜자동입력"
@@ -165,11 +203,19 @@ export default function InventorySurveyScreen() {
               value={TodayDate()}
               editable={false}
             />
+=======
+            <TextInput style={styles.input} placeholder="파일명 입력" />
+          </View>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>일자</Text>
+            <TextInput style={styles.input} placeholder="YYYY-MM-DD" />
+>>>>>>> ddb4294707be2160592f87e16dc590f3a65e7847
           </View>
         </View>
 
         <View style={styles.inputGroupFull}>
           <Text style={styles.label}>바코드 번호</Text>
+<<<<<<< HEAD
           {/* 바코드 로직 */}
           <TextInput
             style={styles.inputFull}
@@ -198,6 +244,32 @@ export default function InventorySurveyScreen() {
             </View>
             <Text style={styles.checkboxLabel}>병합</Text>
           </TouchableOpacity>
+=======
+          <TextInput style={styles.inputFull} />
+        </View>
+
+        <View style={styles.rowBetween}>
+          {/* ✅ 커스텀 체크박스 영역 시작 */}
+          <TouchableOpacity
+            style={styles.checkboxRow}
+            onPress={() => setIsMerge(!isMerge)} // 누를 때마다 상태 반전
+            activeOpacity={0.8} // 터치감 효과
+          >
+            {/* 체크박스 모양 (네모) */}
+            <View
+              style={[
+                styles.customCheckbox,
+                isMerge && styles.customCheckboxChecked, // 체크되면 스타일 추가
+              ]}
+            >
+              {/* 체크 되었을 때만 아이콘 보이기 */}
+              {isMerge && <Ionicons name="checkmark" size={16} color="white" />}
+            </View>
+
+            <Text style={styles.checkboxLabel}>병합</Text>
+          </TouchableOpacity>
+          {/* 커스텀 체크박스 영역 끝 */}
+>>>>>>> ddb4294707be2160592f87e16dc590f3a65e7847
 
           <View style={styles.totalRow}>
             <Text style={styles.label}>총계</Text>
@@ -207,6 +279,7 @@ export default function InventorySurveyScreen() {
       </View>
 
       {/* 3. Scan Items Header */}
+<<<<<<< HEAD
 
       <View style={styles.scanHeader}>
         <Text style={styles.scanTitle}>
@@ -227,14 +300,36 @@ export default function InventorySurveyScreen() {
                 index={index + 1}
                 name={item.name}
                 count={item.count}
+=======
+      <View style={styles.scanHeader}>
+        <Text style={styles.scanTitle}>스캔 항목 ({scan_count})</Text>
+        <Text style={styles.editButton}>수정</Text>
+      </View>
+      <ScrollView contentContainerStyle={{ paddingBottom: 80 }}>
+        {/* 4. Empty Area */}
+        <View style={styles.listContainer}>
+          {scannedItems.length > 0 ? (
+            scannedItems.map((item, index) => (
+              <Item_list
+                key={item.id}
+                name={item.name}
+                count={item.count}
+                index={index + 1}
+>>>>>>> ddb4294707be2160592f87e16dc590f3a65e7847
               />
             ))
           ) : (
             <View style={styles.emptyArea}>
               <View style={styles.centerMessage}>
+<<<<<<< HEAD
                 <Text style={styles.emptyText}>[데이터 없음]</Text>
                 <Text style={styles.emptyText}>
                   바코드를 스캔하여 항목을 추가해주세요
+=======
+                <Text style={styles.emptyText}>[파일 생성]</Text>
+                <Text style={styles.emptyText}>
+                  버튼을 눌러서 파일을 생성해주세요
+>>>>>>> ddb4294707be2160592f87e16dc590f3a65e7847
                 </Text>
               </View>
             </View>
@@ -244,17 +339,28 @@ export default function InventorySurveyScreen() {
 
       {/* 5. Bottom Buttons */}
       <View style={styles.bottomBar}>
+<<<<<<< HEAD
         {/* 실행 취소 함수 연결함 */}
         <TouchableOpacity style={styles.iconButton} onPress={item_undo}>
+=======
+        <TouchableOpacity
+          style={styles.iconButton}
+          onPress={() => router.back()}
+        >
+>>>>>>> ddb4294707be2160592f87e16dc590f3a65e7847
           <Ionicons name="refresh" size={24} color="black" />
         </TouchableOpacity>
         <TouchableOpacity style={styles.bottomButton}>
           <Ionicons name="save-outline" size={20} color="white" />
           <Text style={styles.bottomButtonText}> 저장</Text>
         </TouchableOpacity>
+<<<<<<< HEAD
 
         {/* 내보내기 함수 연결함 */}
         <TouchableOpacity style={styles.bottomButton} onPress={handleExport}>
+=======
+        <TouchableOpacity style={styles.bottomButton}>
+>>>>>>> ddb4294707be2160592f87e16dc590f3a65e7847
           <Ionicons name="share-social-outline" size={20} color="white" />
           <Text style={styles.bottomButtonText}> 내보내기</Text>
         </TouchableOpacity>
