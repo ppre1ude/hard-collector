@@ -12,6 +12,10 @@ import {
   View,
 } from "react-native";
 
+// Expo 파일 시스템 및 공유 모듈
+import * as FileSystem from "expo-file-system";
+import * as Sharing from "expo-sharing";
+
 import Item_list from "@/components/Item_list";
 
 export default function InventorySurveyScreen() {
@@ -25,6 +29,18 @@ export default function InventorySurveyScreen() {
 
   // 3. 스캔 항목 데이터
   const [scannedItems, setScannedItems] = useState([]);
+
+  // 4. 파일 이름 state
+  const [fileName, setFileName] = useState("");
+
+  // 날짜 함수 (함수로 만든 이유는 나중에 이름이 있을 수도 있어성 ㅎ)
+  const TodayDate = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
 
   // ✅ [기능 추가] 바코드 입력(스캔) 처리 함수
   const handleScan = () => {
@@ -77,6 +93,45 @@ export default function InventorySurveyScreen() {
   // 총 수량 계산
   const total_count = scannedItems.reduce((a, b) => a + b.count, 0);
 
+  //파일 내보내기 함수 (CSV 형식)
+  const handleExport = async () => {
+    if (itemsToDisplay.length === 0) {
+      Alert.alert("알림", "내보낼 항목이 없습니다.");
+      return;
+    }
+    try {
+      const Csvname = fileName.trim() || TodayDate();
+      let csvContent = "\uFEFF"; // 한글 깨짐 방지용 BOM 추가
+      csvContent += `파일명: ,${Csvname}\n`;
+      csvContent += `일자: ,${TodayDate()}\n\n`;
+      csvContent += "순번,바코드,수량\n";
+      let index = 1;
+      itemsToDisplay.forEach((item) => {
+        const name = `"${item.name.replace(/"/g, '""')}"`; // 이름에 따옴표가 있을 경우 이스케이프 처리
+        const count = item.count;
+        csvContent += `${index},${name},${count}\n`;
+        index += 1;
+      });
+
+      const fileUri = FileSystem.documentDirectory + `${Csvname}.csv`;
+      await FileSystem.writeAsStringAsync(fileUri, csvContent, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (isAvailable) {
+        await Sharing.shareAsync(fileUri);
+      } else {
+        Alert.alert("알림", "공유 기능을 사용할 수 없습니다.");
+      }
+
+      await Sharing.shareAsync(fileUri);
+    } catch (error) {
+      console.error("Error exporting inventory survey:", error);
+      Alert.alert("알림", "내보내기 중 오류가 발생했습니다.");
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       {/* 1. Header */}
@@ -95,11 +150,21 @@ export default function InventorySurveyScreen() {
         <View style={styles.row}>
           <View style={styles.inputGroup}>
             <Text style={styles.label}>파일</Text>
-            <TextInput style={styles.input} placeholder="파일명 입력" />
+            <TextInput
+              style={styles.input}
+              placeholder="미입력시날짜자동입력"
+              value={fileName}
+              onChangeText={setFileName}
+            />
           </View>
           <View style={styles.inputGroup}>
             <Text style={styles.label}>일자</Text>
-            <TextInput style={styles.input} placeholder="YYYY-MM-DD" />
+            <TextInput
+              style={styles.input}
+              placeholder="YYYY-MM-DD"
+              value={TodayDate()}
+              editable={false}
+            />
           </View>
         </View>
 
@@ -142,11 +207,14 @@ export default function InventorySurveyScreen() {
       </View>
 
       {/* 3. Scan Items Header */}
+
       <View style={styles.scanHeader}>
         <Text style={styles.scanTitle}>
           스캔 항목 ({itemsToDisplay.length})
         </Text>
-        <Text style={styles.editButton}>수정</Text>
+        <TouchableOpacity onPress={() => router.push("../EditScreen")}>
+          <Text style={styles.editButton}>수정</Text>
+        </TouchableOpacity>
       </View>
 
       {/* 4. List Area */}
@@ -184,7 +252,9 @@ export default function InventorySurveyScreen() {
           <Ionicons name="save-outline" size={20} color="white" />
           <Text style={styles.bottomButtonText}> 저장</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.bottomButton}>
+
+        {/* 내보내기 함수 연결함 */}
+        <TouchableOpacity style={styles.bottomButton} onPress={handleExport}>
           <Ionicons name="share-social-outline" size={20} color="white" />
           <Text style={styles.bottomButtonText}> 내보내기</Text>
         </TouchableOpacity>
