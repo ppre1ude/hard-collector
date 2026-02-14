@@ -44,7 +44,7 @@ export default function StartScreen() {
 
       {/* 하단 저작권 표시 (선택사항) */}
       <View style={styles.footer}>
-        <Text style={styles.footerText}>© 2026 Inventory App</Text>
+        <Text style={styles.footerText}>© 2026 Hard Collector App</Text>
       </View>
     </SafeAreaView>
   );

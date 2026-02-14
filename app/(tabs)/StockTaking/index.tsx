@@ -1,6 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import React, { useMemo, useState } from "react";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Alert,
   SafeAreaView,
@@ -19,27 +25,66 @@ const { StorageAccessFramework } = FileSystem;
 
 export default function InventorySurveyScreen() {
   const router = useRouter();
-
+  const { survey: surveyParam } = useLocalSearchParams();
+  const barcodeInputRef = useRef<TextInput>(null);
   // --- 상태 관리 ---
   const [isMerge, setIsMerge] = useState(true); // 병합 보기 기본값
   const [barcodeText, setBarcodeText] = useState("");
 
   // 상단 입력값 (이미지처럼 기본값 세팅)
   const [fileName, setFileName] = useState("");
+  const [originSurvey, setOriginSurvey] = useState(null);
 
   // 샘플 데이터 (이미지와 비슷하게 초기화)
   const [scannedItems, setScannedItems] = useState([]);
+  useFocusEffect(
+    useCallback(() => {
+      // 화면이 포커스될 때 입력 필드에 포커스
+      barcodeInputRef.current?.focus();
+    }, []),
+  );
 
+  useEffect(() => {
+    if (surveyParam) {
+      const survey = JSON.parse(surveyParam as string);
+      setFileName(survey.name);
+      setScannedItems(survey.items);
+      setOriginSurvey(survey);
+    }
+  }, [surveyParam]);
   // --- 로직 함수들 (기존 기능 유지) ---
-  const handleScan = () => {
-    if (!barcodeText.trim()) return;
+  // Core logic to process a barcode
+  const processBarcode = (barcode: string) => {
+    if (!barcode.trim()) {
+      return;
+    }
     const newItem = {
       id: Date.now(), // 바코드 번호
-      name: barcodeText, // 임시 상품명
+      name: barcode, // 임시 상품명
       count: 1,
     };
-    setScannedItems([...scannedItems, newItem]); // 최신 항목을 아래로
+    setScannedItems((prevItems) => [...prevItems, newItem]); // 최신 항목을 아래로
+  };
+
+  // Handles scanning, clears input, and re-focuses
+  const handleScanAction = () => {
+    processBarcode(barcodeText);
     setBarcodeText("");
+    setTimeout(() => barcodeInputRef.current?.focus(), 50);
+  };
+
+  const handleBarcodeChange = (text: string) => {
+    if (text.includes("\n")) {
+      const cleanedText = text.replace(/\n/g, "");
+      // Only process if there's actual text before the newline
+      if (cleanedText.trim()) {
+        processBarcode(cleanedText);
+      }
+      setBarcodeText(""); // Clear after processing
+      setTimeout(() => barcodeInputRef.current?.focus(), 50); // Re-focus after a short delay
+    } else {
+      setBarcodeText(text);
+    }
   };
 
   const handleUndo = () => {
@@ -73,11 +118,95 @@ export default function InventorySurveyScreen() {
     const year = today.getFullYear();
     const month = String(today.getMonth() + 1).padStart(2, "0"); // 월은 0부터 시작하므로 +1
     const day = String(today.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`; // YYYY-MM-DD 형식
+    const hours = String(today.getHours()).padStart(2, "0");
+    const minutes = String(today.getMinutes()).padStart(2, "0");
+    return `${year}-${month}-${day}-${hours}:${minutes}`; // YYYY-MM-DD 형식
   };
   // 저장 및 내보내기 (기존 함수 틀 유지)
-  const handleSave = () =>
-    Alert.alert("저장", "Hard-collector 폴더에 저장합니다.");
+  const handleSave = async (callback?: () => void) => {
+    if (itemsToDisplay.length === 0) {
+      Alert.alert("알림", "저장할 데이터가 없습니다.");
+      return;
+    }
+
+    const filePath = `${FileSystem.documentDirectory}Hard_Terminal`;
+    const surveyName = fileName || getTodayDate();
+
+    try {
+      // 1. 기존 데이터 읽기
+      let existingSurveys = [];
+      const fileInfo = await FileSystem.getInfoAsync(filePath);
+      if (fileInfo.exists) {
+        const fileContent = await FileSystem.readAsStringAsync(filePath);
+        if (fileContent) {
+          existingSurveys = JSON.parse(fileContent);
+        }
+      }
+      if (originSurvey) {
+        existingSurveys = existingSurveys.filter(
+          (survey) => survey.id !== originSurvey.id,
+        );
+      }
+
+      // 2. 새 조사 데이터 객체 생성
+      const newSurvey = {
+        id: originSurvey?.id || Date.now(),
+        name: surveyName,
+        date: new Date().toISOString(),
+        items: itemsToDisplay, // 병합된 결과 저장
+      };
+
+      // 3. 새 데이터를 배열에 추가
+      existingSurveys.push(newSurvey);
+
+      // 4. 파일에 다시 쓰기 (JSON 형식, 보기 좋게)
+      await FileSystem.writeAsStringAsync(
+        filePath,
+        JSON.stringify(existingSurveys, null, 2),
+      );
+
+      Alert.alert(
+        "저장 완료",
+        `'${surveyName}' 항목이 Hard_Terminal 파일에 저장되었습니다.`,
+      );
+
+      // 5. 저장 후 상태 초기화
+      setFileName("");
+      setScannedItems([]);
+
+      // 6. (Optional) Callback after save
+      if (callback) {
+        callback();
+      }
+    } catch (error) {
+      console.error(error);
+      Alert.alert("오류", "파일 저장 중 문제가 발생했습니다.");
+    }
+  };
+
+  const handleBackPress = () => {
+    if (scannedItems.length > 0) {
+      Alert.alert(
+        "저장하지 않은 변경사항",
+        "변경사항을 저장하고 나가시겠습니까?",
+        [
+          {
+            text: "저장하고 나가기",
+            onPress: () => handleSave(() => router.back()),
+          },
+          {
+            text: "나가기",
+            onPress: () => router.back(),
+            style: "destructive",
+          },
+          { text: "취소", style: "cancel" },
+        ],
+      );
+    } else {
+      router.back();
+    }
+  };
+
   const handleExport = async () => {
     // 1. 데이터 확인
     if (itemsToDisplay.length === 0) {
@@ -131,10 +260,7 @@ export default function InventorySurveyScreen() {
     <SafeAreaView style={styles.container}>
       {/* 1. Header (심플한 화이트 헤더) */}
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backButton}
-        >
+        <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
           <Ionicons name="chevron-back" size={28} color="#4F7327" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>재고 조사 작업</Text>
@@ -178,14 +304,18 @@ export default function InventorySurveyScreen() {
             <Ionicons name="barcode-outline" size={24} color="#888" />
           </View>
           <TextInput
+            ref={barcodeInputRef}
             style={styles.mainInput}
             placeholder="바코드를 스캔하거나 입력하세요"
             placeholderTextColor="#aaa"
             value={barcodeText}
-            onChangeText={setBarcodeText}
-            onSubmitEditing={handleScan}
+            onChangeText={handleBarcodeChange}
+            onSubmitEditing={handleScanAction}
           />
-          <TouchableOpacity style={styles.plusButton} onPress={handleScan}>
+          <TouchableOpacity
+            style={styles.plusButton}
+            onPress={handleScanAction}
+          >
             <Ionicons name="add" size={24} color="white" />
           </TouchableOpacity>
         </View>
@@ -250,7 +380,7 @@ export default function InventorySurveyScreen() {
 
         <TouchableOpacity
           style={[styles.bottomBtn, styles.bottomBtnGreen]}
-          onPress={handleSave}
+          onPress={() => handleSave()}
         >
           <Ionicons name="save" size={24} color="white" />
           <Text style={styles.bottomBtnTextWhite}>저장</Text>
@@ -465,6 +595,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     height: 70,
+    marginBottom: 34,
   },
   bottomBtn: {
     height: 60,
