@@ -1,148 +1,397 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
+  Alert,
   SafeAreaView,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-
-import Item_list from "@/components/Item_list";
+// 기능 연동을 위해 필요한 라이브러리 (기존 로직 유지)
+import * as FileSystem from "expo-file-system";
+import * as Sharing from "expo-sharing";
+const { StorageAccessFramework } = FileSystem;
 
 export default function InventorySurveyScreen() {
   const router = useRouter();
-  // 체크박스 상태 관리 (true = 체크됨, false = 해제됨)
-  const [isMerge, setIsMerge] = useState(false);
+  const { survey: surveyParam } = useLocalSearchParams();
+  const barcodeInputRef = useRef<TextInput>(null);
+  // --- 상태 관리 ---
+  const [isMerge, setIsMerge] = useState(true); // 병합 보기 기본값
+  const [barcodeText, setBarcodeText] = useState("");
 
-  // 샘플 스캔 항목 데이터 일단 가짜
-  const [scannedItems, setScannedItems] = useState([
-    { id: 1, name: "Item 1", count: 2 },
-    { id: 2, name: "Item 2", count: 1 },
-    { id: 3, name: "Item 3", count: 5 },
-    { id: 4, name: "Item 4", count: 3 },
-    { id: 5, name: "Item 5", count: 4 },
-    { id: 6, name: "Item 6", count: 2 },
-    { id: 7, name: "Item 7", count: 6 },
-    { id: 8, name: "Item 8", count: 1 },
-    { id: 9, name: "Item 9", count: 7 },
-    { id: 10, name: "Item 10", count: 2 },
-  ]);
+  // 상단 입력값 (이미지처럼 기본값 세팅)
+  const [fileName, setFileName] = useState("");
+  const [originSurvey, setOriginSurvey] = useState(null);
 
-  const scan_count = scannedItems.length;
+  // 샘플 데이터 (이미지와 비슷하게 초기화)
+  const [scannedItems, setScannedItems] = useState([]);
+  useFocusEffect(
+    useCallback(() => {
+      // 화면이 포커스될 때 입력 필드에 포커스
+      barcodeInputRef.current?.focus();
+    }, []),
+  );
 
-  const total_count = scannedItems
-    .map((item) => item.count)
-    .reduce((a, b) => a + b, 0);
+  useEffect(() => {
+    if (surveyParam) {
+      const survey = JSON.parse(surveyParam as string);
+      setFileName(survey.name);
+      setScannedItems(survey.items);
+      setOriginSurvey(survey);
+    }
+  }, [surveyParam]);
+  // --- 로직 함수들 (기존 기능 유지) ---
+  // Core logic to process a barcode
+  const processBarcode = (barcode: string) => {
+    if (!barcode.trim()) {
+      return;
+    }
+    const newItem = {
+      id: Date.now(), // 바코드 번호
+      name: barcode, // 임시 상품명
+      count: 1,
+    };
+    setScannedItems((prevItems) => [...prevItems, newItem]); // 최신 항목을 아래로
+  };
+
+  // Handles scanning, clears input, and re-focuses
+  const handleScanAction = () => {
+    processBarcode(barcodeText);
+    setBarcodeText("");
+    setTimeout(() => barcodeInputRef.current?.focus(), 50);
+  };
+
+  const handleBarcodeChange = (text: string) => {
+    if (text.includes("\n")) {
+      const cleanedText = text.replace(/\n/g, "");
+      // Only process if there's actual text before the newline
+      if (cleanedText.trim()) {
+        processBarcode(cleanedText);
+      }
+      setBarcodeText(""); // Clear after processing
+      setTimeout(() => barcodeInputRef.current?.focus(), 50); // Re-focus after a short delay
+    } else {
+      setBarcodeText(text);
+    }
+  };
+
+  const handleUndo = () => {
+    if (scannedItems.length === 0) {
+      Alert.alert("알림", "되돌릴 항목이 없습니다.");
+      return;
+    }
+    setScannedItems(scannedItems.slice(0, -1));
+  };
+
+  // 병합 로직 (화면 표시용)
+  const itemsToDisplay = useMemo(() => {
+    if (!isMerge) return scannedItems;
+
+    // 이름 기준으로 병합
+    const mergedMap = {};
+    scannedItems.forEach((item) => {
+      const key = item.name; // 혹은 item.code
+      if (mergedMap[key]) {
+        mergedMap[key].count += item.count;
+      } else {
+        mergedMap[key] = { ...item };
+      }
+    });
+    return Object.values(mergedMap);
+  }, [isMerge, scannedItems]);
+
+  const totalCount = itemsToDisplay.length;
+  const getTodayDate = () => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, "0"); // 월은 0부터 시작하므로 +1
+    const day = String(today.getDate()).padStart(2, "0");
+    const hours = String(today.getHours()).padStart(2, "0");
+    const minutes = String(today.getMinutes()).padStart(2, "0");
+    return `${year}-${month}-${day}-${hours}:${minutes}`; // YYYY-MM-DD 형식
+  };
+  // 저장 및 내보내기 (기존 함수 틀 유지)
+  const handleSave = async (callback?: () => void) => {
+    if (itemsToDisplay.length === 0) {
+      Alert.alert("알림", "저장할 데이터가 없습니다.");
+      return;
+    }
+
+    const filePath = `${FileSystem.documentDirectory}Hard_Terminal`;
+    const surveyName = fileName || getTodayDate();
+
+    try {
+      // 1. 기존 데이터 읽기
+      let existingSurveys = [];
+      const fileInfo = await FileSystem.getInfoAsync(filePath);
+      if (fileInfo.exists) {
+        const fileContent = await FileSystem.readAsStringAsync(filePath);
+        if (fileContent) {
+          existingSurveys = JSON.parse(fileContent);
+        }
+      }
+      if (originSurvey) {
+        existingSurveys = existingSurveys.filter(
+          (survey) => survey.id !== originSurvey.id,
+        );
+      }
+
+      // 2. 새 조사 데이터 객체 생성
+      const newSurvey = {
+        id: originSurvey?.id || Date.now(),
+        name: surveyName,
+        date: new Date().toISOString(),
+        items: itemsToDisplay, // 병합된 결과 저장
+      };
+
+      // 3. 새 데이터를 배열에 추가
+      existingSurveys.push(newSurvey);
+
+      // 4. 파일에 다시 쓰기 (JSON 형식, 보기 좋게)
+      await FileSystem.writeAsStringAsync(
+        filePath,
+        JSON.stringify(existingSurveys, null, 2),
+      );
+
+      Alert.alert(
+        "저장 완료",
+        `'${surveyName}' 항목이 Hard_Terminal 파일에 저장되었습니다.`,
+      );
+
+      // 5. 저장 후 상태 초기화
+      setFileName("");
+      setScannedItems([]);
+
+      // 6. (Optional) Callback after save
+      if (callback) {
+        callback();
+      }
+    } catch (error) {
+      console.error(error);
+      Alert.alert("오류", "파일 저장 중 문제가 발생했습니다.");
+    }
+  };
+
+  const handleBackPress = () => {
+    if (scannedItems.length > 0) {
+      Alert.alert(
+        "저장하지 않은 변경사항",
+        "변경사항을 저장하고 나가시겠습니까?",
+        [
+          {
+            text: "저장하고 나가기",
+            onPress: () => handleSave(() => router.back()),
+          },
+          {
+            text: "나가기",
+            onPress: () => router.back(),
+            style: "destructive",
+          },
+          { text: "취소", style: "cancel" },
+        ],
+      );
+    } else {
+      router.back();
+    }
+  };
+
+  const handleExport = async () => {
+    // 1. 데이터 확인
+    if (itemsToDisplay.length === 0) {
+      Alert.alert("알림", "내보낼 데이터가 없습니다.");
+      return;
+    }
+
+    try {
+      // 2. CSV 문자열 생성 (한글 깨짐 방지 BOM 추가)
+      let csvContent = "\uFEFF"; // 헤더
+      let csvName = (() => {
+        if (fileName == "") return getTodayDate();
+        else return fileName;
+      })();
+      csvContent += `파일명, ${csvName}\n`;
+      csvContent += `날짜(수정일), ${getTodayDate()}\n\n`;
+      csvContent += "순번,항목 이름,수량\n"; // 컬럼 헤더
+      let index = 1;
+      itemsToDisplay.forEach((item) => {
+        // 데이터에 쉼표(,)가 있을 경우를 대비해 따옴표로 감쌈
+        const name = `"${item.name.replace(/"/g, '""')}"`;
+        const count = item.count;
+        csvContent += `${index++},${name},${count}\n`;
+      });
+
+      // 3. 파일 경로 설정 (Cache 디렉토리 사용)
+      const fileUri =
+        FileSystem.cacheDirectory + `${fileName || getTodayDate()}.csv`;
+
+      // 4. 파일 쓰기
+      await FileSystem.writeAsStringAsync(fileUri, csvContent, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+
+      // 5. 공유 가능 여부 체크
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (!isAvailable) {
+        Alert.alert("알림", "이 기기에서는 공유 기능을 사용할 수 없습니다.");
+        return;
+      }
+
+      // 6. 공유 실행
+      await Sharing.shareAsync(fileUri);
+    } catch (error) {
+      console.error(error);
+      Alert.alert("오류", "파일 내보내기 중 문제가 발생했습니다.");
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* 1. Header */}
+      {/* 1. Header (심플한 화이트 헤더) */}
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.push("/SurveyManagement")}
-        >
-          <Ionicons name="chevron-back" size={28} color="white" />
+        <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
+          <Ionicons name="chevron-back" size={28} color="#4F7327" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>재고 조사</Text>
+        <Text style={styles.headerTitle}>재고 조사 작업</Text>
+        <View style={{ width: 28 }} />
+        {/* 타이틀 중앙 정렬을 위한 빈 공간 */}
       </View>
 
-      {/* 2. Input Form Area */}
-      <View style={styles.formContainer}>
-        <View style={styles.row}>
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>파일</Text>
-            <TextInput style={styles.input} placeholder="파일명 입력" />
+      <View style={styles.contentContainer}>
+        {/* 2. Top Info Section (파일명, 날짜) */}
+        <View style={styles.infoSection}>
+          <View style={styles.infoRow}>
+            <Ionicons
+              name="document-text"
+              size={20}
+              color="#4F7327"
+              style={styles.infoIcon}
+            />
+            <TextInput
+              style={styles.infoText}
+              value={fileName}
+              onChangeText={setFileName}
+              placeholder="파일명을 입력하세요"
+            />
           </View>
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>일자</Text>
-            <TextInput style={styles.input} placeholder="YYYY-MM-DD" />
-          </View>
-        </View>
-
-        <View style={styles.inputGroupFull}>
-          <Text style={styles.label}>바코드 번호</Text>
-          <TextInput style={styles.inputFull} />
-        </View>
-
-        <View style={styles.rowBetween}>
-          {/* ✅ 커스텀 체크박스 영역 시작 */}
-          <TouchableOpacity
-            style={styles.checkboxRow}
-            onPress={() => setIsMerge(!isMerge)} // 누를 때마다 상태 반전
-            activeOpacity={0.8} // 터치감 효과
-          >
-            {/* 체크박스 모양 (네모) */}
-            <View
-              style={[
-                styles.customCheckbox,
-                isMerge && styles.customCheckboxChecked, // 체크되면 스타일 추가
-              ]}
-            >
-              {/* 체크 되었을 때만 아이콘 보이기 */}
-              {isMerge && <Ionicons name="checkmark" size={16} color="white" />}
+          <View style={[styles.infoRow, { marginTop: 8 }]}>
+            <Ionicons
+              name="calendar"
+              size={20}
+              color="#4F7327"
+              style={styles.infoIcon}
+            />
+            <View style={styles.infoText}>
+              <Text>{getTodayDate()}</Text>
             </View>
-
-            <Text style={styles.checkboxLabel}>병합</Text>
-          </TouchableOpacity>
-          {/* 커스텀 체크박스 영역 끝 */}
-
-          <View style={styles.totalRow}>
-            <Text style={styles.label}>총계</Text>
-            <Text>{total_count}</Text>
           </View>
         </View>
-      </View>
 
-      {/* 3. Scan Items Header */}
-      <View style={styles.scanHeader}>
-        <Text style={styles.scanTitle}>스캔 항목 ({scan_count})</Text>
-        <Text style={styles.editButton}>수정</Text>
-      </View>
-      <ScrollView contentContainerStyle={{ paddingBottom: 80 }}>
-        {/* 4. Empty Area */}
-        <View style={styles.listContainer}>
-          {scannedItems.length > 0 ? (
-            scannedItems.map((item, index) => (
-              <Item_list
-                key={item.id}
-                name={item.name}
-                count={item.count}
-                index={index + 1}
-              />
-            ))
-          ) : (
-            <View style={styles.emptyArea}>
-              <View style={styles.centerMessage}>
-                <Text style={styles.emptyText}>[파일 생성]</Text>
-                <Text style={styles.emptyText}>
-                  버튼을 눌러서 파일을 생성해주세요
-                </Text>
+        {/* 3. Barcode Input (녹색 테두리 박스) */}
+        <View style={styles.inputContainer}>
+          <View style={styles.barcodeIconContainer}>
+            <Ionicons name="barcode-outline" size={24} color="#888" />
+          </View>
+          <TextInput
+            ref={barcodeInputRef}
+            style={styles.mainInput}
+            placeholder="바코드를 스캔하거나 입력하세요"
+            placeholderTextColor="#aaa"
+            value={barcodeText}
+            onChangeText={handleBarcodeChange}
+            onSubmitEditing={handleScanAction}
+          />
+          <TouchableOpacity
+            style={styles.plusButton}
+            onPress={handleScanAction}
+          >
+            <Ionicons name="add" size={24} color="white" />
+          </TouchableOpacity>
+        </View>
+
+        {/* 4. Toggle & Count (병합 보기 스위치) */}
+        <View style={styles.controlRow}>
+          <View style={styles.switchContainer}>
+            <Switch
+              trackColor={{ false: "#767577", true: "#4F7327" }}
+              thumbColor={isMerge ? "#f4f3f4" : "#f4f3f4"}
+              onValueChange={() => setIsMerge(!isMerge)}
+              value={isMerge}
+              style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+            />
+            <Text style={styles.switchLabel}>동일 항목 병합해서 보기</Text>
+          </View>
+          <View style={styles.badgeContainer}>
+            <Text style={styles.badgeText}>총 {totalCount}개 항목</Text>
+          </View>
+        </View>
+
+        {/* 5. List Area (카드 리스트) */}
+        <ScrollView contentContainerStyle={styles.listContent}>
+          {itemsToDisplay.map((item, index) => (
+            <View key={index} style={styles.card}>
+              {/* 왼쪽 아이콘 박스 */}
+              <View style={styles.cardIconBox}>
+                <Ionicons
+                  name="file-tray-full-outline"
+                  size={24}
+                  color="#4F7327"
+                />
+              </View>
+
+              {/* 중간 텍스트 */}
+              <View style={styles.cardInfo}>
+                <Text style={styles.cardName}>{item.name}</Text>
+              </View>
+
+              {/* 오른쪽 수량 및 수정 버튼 */}
+              <View style={styles.cardRight}>
+                <View style={styles.countRow}>
+                  <Text style={styles.countText}>{item.count}</Text>
+                  <Text style={styles.unitText}> 개</Text>
+                </View>
               </View>
             </View>
-          )}
-        </View>
-      </ScrollView>
+          ))}
+          <View style={{ height: 100 }} />
+        </ScrollView>
+      </View>
 
-      {/* 5. Bottom Buttons */}
-      <View style={styles.bottomBar}>
+      {/* 6. Bottom Navigation Bar (3개의 둥근 버튼) */}
+      <View style={styles.bottomContainer}>
         <TouchableOpacity
-          style={styles.iconButton}
-          onPress={() => router.back()}
+          style={[styles.bottomBtn, styles.bottomBtnWhite]}
+          onPress={handleUndo}
         >
-          <Ionicons name="refresh" size={24} color="black" />
+          <Ionicons name="refresh" size={24} color="#555" />
+          <Text style={styles.bottomBtnTextGray}>되돌리기</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.bottomButton}>
-          <Ionicons name="save-outline" size={20} color="white" />
-          <Text style={styles.bottomButtonText}> 저장</Text>
+
+        <TouchableOpacity
+          style={[styles.bottomBtn, styles.bottomBtnGreen]}
+          onPress={() => handleSave()}
+        >
+          <Ionicons name="save" size={24} color="white" />
+          <Text style={styles.bottomBtnTextWhite}>저장</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.bottomButton}>
-          <Ionicons name="share-social-outline" size={20} color="white" />
-          <Text style={styles.bottomButtonText}> 내보내기</Text>
+
+        <TouchableOpacity
+          style={[styles.bottomBtn, styles.bottomBtnWhite]}
+          onPress={handleExport}
+        >
+          <Ionicons name="share-outline" size={24} color="#555" />
+          <Text style={styles.bottomBtnTextGray}>내보내기</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -150,139 +399,237 @@ export default function InventorySurveyScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
+  container: {
+    flex: 1,
+    backgroundColor: "#F9FAF8", // 아주 연한 회색/미색 배경
+  },
+  contentContainer: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+  },
+
+  // Header
   header: {
-    backgroundColor: "#4F7327",
-    padding: 15,
-    alignItems: "center", // 세로 중앙 정렬
-    justifyContent: "center", // 가로 중앙 정렬 (제목을 위해)
-    flexDirection: "row", // 가로 배치
-    position: "relative", // 자식요소(버튼)의 절대 위치 기준점
-    height: 50, // 헤더 높이 고정 (선택사항, 레이아웃 안정됨)
-  },
-  headerTitle: { color: "white", fontSize: 18, fontWeight: "bold" },
-
-  formContainer: { backgroundColor: "#D8E9A8", padding: 15 },
-  row: {
+    paddingTop: 60,
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 10,
-  },
-  inputGroup: {
-    flex: 0.48,
-    flexDirection: "row",
-    alignItems: "center",
+    paddingVertical: 15,
+    paddingHorizontal: 20,
     backgroundColor: "white",
-    borderRadius: 5,
-    padding: 5,
   },
-  inputGroupFull: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "white",
-    borderRadius: 5,
-    padding: 5,
-    marginBottom: 10,
-  },
-  label: { fontWeight: "bold", marginRight: 10, paddingLeft: 5 },
-  input: { flex: 1, padding: 5 },
-  inputFull: { flex: 1, padding: 5 },
-
-  rowBetween: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#333",
   },
 
-  // ✅ 커스텀 체크박스 스타일
-  checkboxRow: {
+  // Top Info Section
+  infoSection: {
+    marginBottom: 20,
+  },
+  infoRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 5,
-  },
-  customCheckbox: {
-    width: 22,
-    height: 22,
+    backgroundColor: "#F1F8E9", // 연한 녹색 배경
+    borderRadius: 8,
+    paddingHorizontal: 15,
+    paddingVertical: 12,
     borderWidth: 1,
-    borderColor: "#007AFF", // 테두리 색상
-    backgroundColor: "white", // 기본 배경 흰색
-    borderRadius: 3, // 약간 둥글게 (완전 네모를 원하면 0으로)
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 8,
+    borderColor: "#DCEDC8",
   },
-  customCheckboxChecked: {
-    backgroundColor: "#007AFF", // 체크 시 배경색 (녹색)
-    borderColor: "#007AFF",
+  infoIcon: {
+    marginRight: 10,
   },
-  checkboxLabel: { fontWeight: "bold", fontSize: 16 },
+  infoText: {
+    fontSize: 16,
+    color: "#558B2F",
+    fontWeight: "500",
+    flex: 1,
+  },
 
-  totalRow: {
+  // Barcode Input
+  inputContainer: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "white",
-    borderRadius: 5,
-    padding: 5,
-    width: 150,
+    borderRadius: 15,
+    borderWidth: 2,
+    borderColor: "#4F7327", // 진한 녹색 테두리
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    height: 60,
+    marginBottom: 15,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  inputSmall: { flex: 1, padding: 5 },
-
-  scanHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    padding: 15,
-    borderBottomWidth: 1,
-    borderColor: "#eee",
+  barcodeIconContainer: {
+    marginRight: 10,
+    paddingLeft: 5,
   },
-  scanTitle: { fontSize: 16, fontWeight: "bold" },
-  editButton: { fontSize: 16, fontWeight: "bold" },
-
-  emptyArea: {
-    height: 300,
+  mainInput: {
+    flex: 1,
+    fontSize: 16,
+    color: "#333",
+  },
+  plusButton: {
+    backgroundColor: "#4F7327",
+    borderRadius: 10,
+    width: 40,
+    height: 40,
     justifyContent: "center",
     alignItems: "center",
-    position: "relative",
   },
-  wondaeButton: {
-    position: "absolute",
-    top: 50,
-    right: 100,
-    backgroundColor: "#88B04B",
-    padding: 10,
-    borderRadius: 20,
+
+  // Toggle Row
+  controlRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 15,
+  },
+  switchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  switchLabel: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: "#555",
+    fontWeight: "600",
+  },
+  badgeContainer: {
+    backgroundColor: "#E6EE9C", // 라임색 배지
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  badgeText: {
+    fontSize: 13,
+    color: "#4F7327",
+    fontWeight: "bold",
+  },
+
+  // Card List
+  listContent: {
+    paddingBottom: 20,
+  },
+  card: {
+    backgroundColor: "white",
+    borderRadius: 16,
+    padding: 15,
+    marginBottom: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    // 그림자
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
     elevation: 3,
   },
-  wondaeText: { color: "white", fontWeight: "bold" },
-  centerMessage: { alignItems: "center", marginTop: 50 },
-  emptyText: { color: "#aaa", fontSize: 14 },
-
-  bottomBar: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    padding: 10,
-    backgroundColor: "#fff",
-    borderTopWidth: 1,
-    borderColor: "#eee",
-  },
-  iconButton: { justifyContent: "center", paddingHorizontal: 15 },
-  bottomButton: {
-    flex: 1,
-    backgroundColor: "#A4C686",
-    padding: 12,
-    marginHorizontal: 5,
-    borderRadius: 8,
-    flexDirection: "row",
+  cardIconBox: {
+    width: 48,
+    height: 48,
+    backgroundColor: "#F1F8E9",
+    borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
+    marginRight: 15,
   },
-  bottomButtonText: { color: "white", fontWeight: "bold" },
-  listContainer: { minHeight: 300 },
-  backButton: {
-    position: "absolute", // 제목에 영향 주지 않고 띄우기
-    left: 15, // 왼쪽 여백
-    zIndex: 1, // 다른 요소보다 위에 오게 설정
+  cardInfo: {
+    flex: 1,
+  },
+  cardCode: {
+    fontSize: 12,
+    color: "#999",
+    marginBottom: 4,
+  },
+  cardName: {
+    width: 200,
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#333",
+  },
+  cardRight: {
+    alignItems: "flex-end",
+  },
+  countRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    marginBottom: 6,
+  },
+  countText: {
+    fontSize: 22,
+    fontWeight: "bold",
+    color: "#333",
+  },
+  unitText: {
+    fontSize: 14,
+    color: "#888",
+    marginBottom: 3,
+  },
+  editButton: {
+    borderWidth: 1,
+    borderColor: "#AED581",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  editButtonText: {
+    fontSize: 12,
+    color: "#558B2F",
+    fontWeight: "bold",
+  },
+
+  // Bottom Navigation
+  bottomContainer: {
+    position: "absolute",
+    bottom: 20,
+    left: 20,
+    right: 20,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    height: 70,
+    marginBottom: 34,
+  },
+  bottomBtn: {
+    height: 60,
+    width: "32%",
+    flex: 1,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    marginHorizontal: 5,
+    // 그림자
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  bottomBtnWhite: {
+    backgroundColor: "white",
+    borderWidth: 1,
+    borderColor: "#eee",
+  },
+  bottomBtnGreen: {
+    backgroundColor: "#4F7327",
+  },
+  bottomBtnTextGray: {
+    marginTop: 4,
+    fontSize: 12,
+    color: "#555",
+    fontWeight: "600",
+  },
+  bottomBtnTextWhite: {
+    marginTop: 4,
+    fontSize: 12,
+    color: "white",
+    fontWeight: "600",
   },
 });
