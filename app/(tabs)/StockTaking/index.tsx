@@ -35,6 +35,7 @@ export default function InventorySurveyScreen() {
   const [fileName, setFileName] = useState("");
   const [originDate, setOriginDate] = useState("");
   const [originSurvey, setOriginSurvey] = useState<any>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   const getTodayDate = () => {
     const today = new Date();
@@ -72,6 +73,7 @@ export default function InventorySurveyScreen() {
     } else {
       setOriginDate(getTodayDate());
     }
+    setHasUnsavedChanges(false);
   }, [surveyParam]);
   // --- 로직 함수들 (기존 기능 유지) ---
   // Core logic to process a barcode
@@ -85,6 +87,7 @@ export default function InventorySurveyScreen() {
       count: 1,
     };
     setScannedItems((prevItems) => [...prevItems, newItem]); // 최신 항목을 아래로
+    setHasUnsavedChanges(true);
   };
 
   // Handles scanning, clears input, and re-focuses
@@ -114,6 +117,7 @@ export default function InventorySurveyScreen() {
       return;
     }
     setScannedItems(scannedItems.slice(0, -1));
+    setHasUnsavedChanges(true);
   };
 
   // 병합 로직 (화면 표시용)
@@ -139,6 +143,12 @@ export default function InventorySurveyScreen() {
   const handleSave = async (callback?: () => void) => {
     if (itemsToDisplay.length === 0) {
       Alert.alert("알림", "저장할 데이터가 없습니다.");
+      return;
+    }
+
+    if (!hasUnsavedChanges) {
+      Alert.alert("알림", "변경된 내용이 없습니다.");
+      if (callback) callback();
       return;
     }
 
@@ -198,6 +208,7 @@ export default function InventorySurveyScreen() {
               // 5. 저장 후 상태 초기화
               setFileName("");
               setScannedItems([]);
+              setHasUnsavedChanges(false);
 
               // 6. (Optional) Callback after save
               if (callback) {
@@ -214,7 +225,7 @@ export default function InventorySurveyScreen() {
   };
 
   const handleBackPress = () => {
-    if (scannedItems.length > 0) {
+    if (hasUnsavedChanges) {
       Alert.alert(
         "저장하지 않은 변경사항",
         "변경사항을 저장하고 나가시겠습니까?",
@@ -310,7 +321,7 @@ export default function InventorySurveyScreen() {
             <TextInput
               style={styles.infoText}
               value={fileName}
-              onChangeText={setFileName}
+              onChangeText={(text) => { setFileName(text); setHasUnsavedChanges(true); }}
               placeholder="파일명을 입력하세요"
             />
           </View>
@@ -324,7 +335,7 @@ export default function InventorySurveyScreen() {
             <TextInput
               style={styles.infoText}
               value={originDate}
-              onChangeText={setOriginDate}
+              onChangeText={(text) => { setOriginDate(text); setHasUnsavedChanges(true); }}
               placeholder="날짜를 입력하세요"
             />
           </View>
