@@ -90,7 +90,20 @@ export default function SurveyManagementScreen() {
         items: items,
       };
 
-      setSurveys((prev) => [tempSurvey, ...prev]);
+      // 목록에 추가함과 동시에 데이터 저장 (파일 시스템)
+      const newSurveys = [tempSurvey, ...surveys];
+      const filePath = `${FileSystem.documentDirectory}Hard_Terminal`;
+      await FileSystem.writeAsStringAsync(
+        filePath,
+        JSON.stringify(newSurveys, null, 2),
+      );
+      setSurveys(newSurveys);
+
+      // 재고 조사 메인 화면으로 자동 이동
+      router.push({
+        pathname: "/StockTaking",
+        params: { survey: JSON.stringify(tempSurvey) },
+      });
     } catch (error) {
       Alert.alert("오류", "파일을 가져오는 중 문제가 발생했습니다.");
     }
