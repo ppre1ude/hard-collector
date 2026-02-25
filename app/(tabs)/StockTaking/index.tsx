@@ -33,7 +33,18 @@ export default function InventorySurveyScreen() {
 
   // 상단 입력값 (이미지처럼 기본값 세팅)
   const [fileName, setFileName] = useState("");
-  const [originSurvey, setOriginSurvey] = useState(null);
+  const [originDate, setOriginDate] = useState("");
+  const [originSurvey, setOriginSurvey] = useState<any>(null);
+
+  const getTodayDate = () => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, "0"); // 월은 0부터 시작하므로 +1
+    const day = String(today.getDate()).padStart(2, "0");
+    const hours = String(today.getHours()).padStart(2, "0");
+    const minutes = String(today.getMinutes()).padStart(2, "0");
+    return `${year}-${month}-${day}-${hours}:${minutes}`; // YYYY-MM-DD 형식
+  };
 
   // 샘플 데이터 (이미지와 비슷하게 초기화)
   const [scannedItems, setScannedItems] = useState([]);
@@ -50,6 +61,16 @@ export default function InventorySurveyScreen() {
       setFileName(survey.name);
       setScannedItems(survey.items);
       setOriginSurvey(survey);
+      // 포맷된 날짜가 있다면 사용하고, 없으면 ISO string을 포맷팅해서 입력창에 넣기 위해
+      const d = new Date(survey.date);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      const hours = String(d.getHours()).padStart(2, "0");
+      const minutes = String(d.getMinutes()).padStart(2, "0");
+      setOriginDate(`${year}-${month}-${day}-${hours}:${minutes}`);
+    } else {
+      setOriginDate(getTodayDate());
     }
   }, [surveyParam]);
   // --- 로직 함수들 (기존 기능 유지) ---
@@ -113,15 +134,7 @@ export default function InventorySurveyScreen() {
   }, [isMerge, scannedItems]);
 
   const totalCount = itemsToDisplay.length;
-  const getTodayDate = () => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, "0"); // 월은 0부터 시작하므로 +1
-    const day = String(today.getDate()).padStart(2, "0");
-    const hours = String(today.getHours()).padStart(2, "0");
-    const minutes = String(today.getMinutes()).padStart(2, "0");
-    return `${year}-${month}-${day}-${hours}:${minutes}`; // YYYY-MM-DD 형식
-  };
+
   // 저장 및 내보내기 (기존 함수 틀 유지)
   const handleSave = async (callback?: () => void) => {
     if (itemsToDisplay.length === 0) {
@@ -131,6 +144,7 @@ export default function InventorySurveyScreen() {
 
     const filePath = `${FileSystem.documentDirectory}Hard_Terminal`;
     const surveyName = fileName || getTodayDate();
+    const surveyDate = originDate || getTodayDate();
 
     try {
       // 1. 기존 데이터 읽기
@@ -152,7 +166,7 @@ export default function InventorySurveyScreen() {
       const newSurvey = {
         id: originSurvey?.id || Date.now(),
         name: surveyName,
-        date: new Date().toISOString(),
+        date: originDate, // 사용자가 수정한 텍스트 반영
         items: itemsToDisplay, // 병합된 결과 저장
       };
 
@@ -292,9 +306,12 @@ export default function InventorySurveyScreen() {
               color="#4F7327"
               style={styles.infoIcon}
             />
-            <View style={styles.infoText}>
-              <Text>{getTodayDate()}</Text>
-            </View>
+            <TextInput
+              style={styles.infoText}
+              value={originDate}
+              onChangeText={setOriginDate}
+              placeholder="날짜를 입력하세요"
+            />
           </View>
         </View>
 

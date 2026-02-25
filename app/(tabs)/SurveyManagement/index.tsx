@@ -204,6 +204,37 @@ export default function SurveyManagementScreen() {
                   params: { survey: JSON.stringify(survey) },
                 })
               }
+              onLongPress={(e) => {
+                e.stopPropagation();
+                Alert.prompt(
+                  "이름 변경",
+                  "새로운 파일 이름을 입력하세요",
+                  [
+                    { text: "취소", style: "cancel" },
+                    {
+                      text: "변경",
+                      onPress: async (newName) => {
+                        if (!newName || newName.trim() === "") return;
+                        const updatedSurveys = surveys.map((s) =>
+                          s.id === survey.id ? { ...s, name: newName } : s
+                        );
+                        const filePath = `${FileSystem.documentDirectory}Hard_Terminal`;
+                        try {
+                          await FileSystem.writeAsStringAsync(
+                            filePath,
+                            JSON.stringify(updatedSurveys, null, 2)
+                          );
+                          setSurveys(updatedSurveys);
+                        } catch (error) {
+                          Alert.alert("오류", "이름 변경 중 문제가 발생했습니다.");
+                        }
+                      },
+                    },
+                  ],
+                  "plain-text",
+                  survey.name
+                );
+              }}
             >
               <View style={styles.fileIconBox}>
                 <MaterialCommunityIcons
