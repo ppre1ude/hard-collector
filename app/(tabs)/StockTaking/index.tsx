@@ -1,5 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
+import * as FileSystem from "expo-file-system";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import * as Sharing from "expo-sharing";
 import React, {
   useCallback,
   useEffect,
@@ -18,9 +20,9 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-// 기능 연동을 위해 필요한 라이브러리 (기존 로직 유지)
-import * as FileSystem from "expo-file-system";
-import * as Sharing from "expo-sharing";
+import { generateCsvContent, mergeItemsByName, ScannedItem } from "../../../utils/barcodeUtils";
+import { formatDateFromISO, getTodayDate } from "../../../utils/dateUtils";
+
 const { StorageAccessFramework } = FileSystem;
 
 export default function InventorySurveyScreen() {
@@ -37,18 +39,8 @@ export default function InventorySurveyScreen() {
   const [originSurvey, setOriginSurvey] = useState<any>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
-  const getTodayDate = () => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, "0"); // 월은 0부터 시작하므로 +1
-    const day = String(today.getDate()).padStart(2, "0");
-    const hours = String(today.getHours()).padStart(2, "0");
-    const minutes = String(today.getMinutes()).padStart(2, "0");
-    return `${year}-${month}-${day}-${hours}:${minutes}`; // YYYY-MM-DD 형식
-  };
-
   // 샘플 데이터 (이미지와 비슷하게 초기화)
-  const [scannedItems, setScannedItems] = useState([]);
+  const [scannedItems, setScannedItems] = useState<ScannedItem[]>([]);
   useFocusEffect(
     useCallback(() => {
       // 화면이 포커스될 때 입력 필드에 포커스
@@ -63,13 +55,7 @@ export default function InventorySurveyScreen() {
       setScannedItems(survey.items);
       setOriginSurvey(survey);
       // 포맷된 날짜가 있다면 사용하고, 없으면 ISO string을 포맷팅해서 입력창에 넣기 위해
-      const d = new Date(survey.date);
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, "0");
-      const day = String(d.getDate()).padStart(2, "0");
-      const hours = String(d.getHours()).padStart(2, "0");
-      const minutes = String(d.getMinutes()).padStart(2, "0");
-      setOriginDate(`${year}-${month}-${day}-${hours}:${minutes}`);
+      setOriginDate(formatDateFromISO(survey.date));
     } else {
       setOriginDate(getTodayDate());
     }
@@ -123,18 +109,7 @@ export default function InventorySurveyScreen() {
   // 병합 로직 (화면 표시용)
   const itemsToDisplay = useMemo(() => {
     if (!isMerge) return scannedItems;
-
-    // 이름 기준으로 병합
-    const mergedMap = {};
-    scannedItems.forEach((item) => {
-      const key = item.name; // 혹은 item.code
-      if (mergedMap[key]) {
-        mergedMap[key].count += item.count;
-      } else {
-        mergedMap[key] = { ...item };
-      }
-    });
-    return Object.values(mergedMap);
+    return mergeItemsByName(scannedItems);
   }, [isMerge, scannedItems]);
 
   const totalCount = itemsToDisplay.length;
@@ -256,25 +231,12 @@ export default function InventorySurveyScreen() {
 
     try {
       // 2. CSV 문자열 생성 (한글 깨짐 방지 BOM 추가)
-      let csvContent = "\uFEFF"; // 헤더
-      let csvName = (() => {
-        if (fileName == "") return getTodayDate();
-        else return fileName;
-      })();
-      csvContent += `파일명, ${csvName}\n`;
-      csvContent += `날짜(수정일), ${getTodayDate()}\n\n`;
-      csvContent += "순번,항목 이름,수량\n"; // 컬럼 헤더
-      let index = 1;
-      itemsToDisplay.forEach((item) => {
-        // 데이터에 쉼표(,)가 있을 경우를 대비해 따옴표로 감쌈
-        const name = `"${item.name.replace(/"/g, '""')}"`;
-        const count = item.count;
-        csvContent += `${index++},${name},${count}\n`;
-      });
+      const csvName = fileName || getTodayDate();
+      const csvContent = generateCsvContent(csvName, getTodayDate(), itemsToDisplay);
 
       // 3. 파일 경로 설정 (Cache 디렉토리 사용)
       const fileUri =
-        FileSystem.cacheDirectory + `${fileName || getTodayDate()}.csv`;
+        FileSystem.cacheDirectory + `${csvName}.csv`;
 
       // 4. 파일 쓰기
       await FileSystem.writeAsStringAsync(fileUri, csvContent, {

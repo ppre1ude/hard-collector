@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { parseCsvToItems } from "../../../utils/barcodeUtils";
 
 interface Survey {
   id: number;
@@ -61,22 +62,7 @@ export default function SurveyManagementScreen() {
       const fileUri = result.assets[0].uri;
       const csvContent = await FileSystem.readAsStringAsync(fileUri);
 
-      const lines = csvContent.split("\n");
-      const items: { name: string; count: number }[] = [];
-      let dataStarted = false;
-
-      for (const line of lines) {
-        if (!dataStarted) {
-          if (line.includes("순번,항목 이름,수량")) dataStarted = true;
-          continue;
-        }
-        const parts = line.split(",");
-        if (parts.length >= 3) {
-          const name = parts[1].replace(/"/g, "").trim();
-          const count = parseInt(parts[2].trim(), 10);
-          if (name && !isNaN(count)) items.push({ name, count });
-        }
-      }
+      const items = parseCsvToItems(csvContent);
 
       if (items.length === 0) {
         Alert.alert("알림", "CSV에서 유효한 데이터를 찾을 수 없습니다.");
