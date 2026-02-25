@@ -142,60 +142,75 @@ export default function InventorySurveyScreen() {
       return;
     }
 
-    const filePath = `${FileSystem.documentDirectory}Hard_Terminal`;
-    const surveyName = fileName || getTodayDate();
-    const surveyDate = originDate || getTodayDate();
+    const totalScanned = scannedItems.reduce((acc, item) => acc + item.count, 0);
+    const uniqueItems = itemsToDisplay.length;
 
-    try {
-      // 1. 기존 데이터 읽기
-      let existingSurveys = [];
-      const fileInfo = await FileSystem.getInfoAsync(filePath);
-      if (fileInfo.exists) {
-        const fileContent = await FileSystem.readAsStringAsync(filePath);
-        if (fileContent) {
-          existingSurveys = JSON.parse(fileContent);
+    Alert.alert(
+      "저장 확인",
+      `총 ${totalScanned}개의 내역을 스캔했습니다.\n병합 시 저장될 항목은 ${uniqueItems}개입니다.\n현재 상태를 저장하시겠습니까?`,
+      [
+        { text: "취소", style: "cancel" },
+        {
+          text: "저장",
+          onPress: async () => {
+            const filePath = `${FileSystem.documentDirectory}Hard_Terminal`;
+            const surveyName = fileName || getTodayDate();
+            const surveyDate = originDate || getTodayDate();
+
+            try {
+              // 1. 기존 데이터 읽기
+              let existingSurveys = [];
+              const fileInfo = await FileSystem.getInfoAsync(filePath);
+              if (fileInfo.exists) {
+                const fileContent = await FileSystem.readAsStringAsync(filePath);
+                if (fileContent) {
+                  existingSurveys = JSON.parse(fileContent);
+                }
+              }
+              if (originSurvey) {
+                existingSurveys = existingSurveys.filter(
+                  (survey) => survey.id !== originSurvey.id,
+                );
+              }
+
+              // 2. 새 조사 데이터 객체 생성
+              const newSurvey = {
+                id: originSurvey?.id || Date.now(),
+                name: surveyName,
+                date: surveyDate, // 사용자가 수정한 텍스트 반영
+                items: itemsToDisplay, // 병합된 결과 저장
+              };
+
+              // 3. 새 데이터를 배열에 추가
+              existingSurveys.push(newSurvey);
+
+              // 4. 파일에 다시 쓰기 (JSON 형식, 보기 좋게)
+              await FileSystem.writeAsStringAsync(
+                filePath,
+                JSON.stringify(existingSurveys, null, 2),
+              );
+
+              Alert.alert(
+                "저장 완료",
+                `'${surveyName}' 항목이 저장되었습니다.`,
+              );
+
+              // 5. 저장 후 상태 초기화
+              setFileName("");
+              setScannedItems([]);
+
+              // 6. (Optional) Callback after save
+              if (callback) {
+                callback();
+              }
+            } catch (error) {
+              console.error(error);
+              Alert.alert("오류", "파일 저장 중 문제가 발생했습니다.");
+            }
+          }
         }
-      }
-      if (originSurvey) {
-        existingSurveys = existingSurveys.filter(
-          (survey) => survey.id !== originSurvey.id,
-        );
-      }
-
-      // 2. 새 조사 데이터 객체 생성
-      const newSurvey = {
-        id: originSurvey?.id || Date.now(),
-        name: surveyName,
-        date: originDate, // 사용자가 수정한 텍스트 반영
-        items: itemsToDisplay, // 병합된 결과 저장
-      };
-
-      // 3. 새 데이터를 배열에 추가
-      existingSurveys.push(newSurvey);
-
-      // 4. 파일에 다시 쓰기 (JSON 형식, 보기 좋게)
-      await FileSystem.writeAsStringAsync(
-        filePath,
-        JSON.stringify(existingSurveys, null, 2),
-      );
-
-      Alert.alert(
-        "저장 완료",
-        `'${surveyName}' 항목이 Hard_Terminal 파일에 저장되었습니다.`,
-      );
-
-      // 5. 저장 후 상태 초기화
-      setFileName("");
-      setScannedItems([]);
-
-      // 6. (Optional) Callback after save
-      if (callback) {
-        callback();
-      }
-    } catch (error) {
-      console.error(error);
-      Alert.alert("오류", "파일 저장 중 문제가 발생했습니다.");
-    }
+      ]
+    );
   };
 
   const handleBackPress = () => {
