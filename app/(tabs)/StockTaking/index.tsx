@@ -9,8 +9,8 @@ import React, {
 } from "react";
 import {
   Alert,
+  FlatList,
   SafeAreaView,
-  ScrollView,
   StyleSheet,
   Switch,
   Text,
@@ -43,7 +43,6 @@ export default function InventorySurveyScreen() {
       barcodeInputRef.current?.focus();
     }, []),
   );
-
   useEffect(() => {
     if (surveyParam) {
       const survey = JSON.parse(surveyParam as string);
@@ -52,6 +51,7 @@ export default function InventorySurveyScreen() {
       setOriginSurvey(survey);
     }
   }, [surveyParam]);
+
   // --- 로직 함수들 (기존 기능 유지) ---
   // Core logic to process a barcode
   const processBarcode = (barcode: string) => {
@@ -95,10 +95,13 @@ export default function InventorySurveyScreen() {
     setScannedItems(scannedItems.slice(0, -1));
   };
 
+  const mergeTimesRef = useRef<number[]>([]);
+
   // 병합 로직 (화면 표시용)
   const itemsToDisplay = useMemo(() => {
     if (!isMerge) return scannedItems;
 
+    const startTime = performance.now(); // 성능 측정 시작 시간
     // 이름 기준으로 병합
     const mergedMap = {};
     scannedItems.forEach((item) => {
@@ -109,6 +112,19 @@ export default function InventorySurveyScreen() {
         mergedMap[key] = { ...item };
       }
     });
+
+    const endTime = performance.now(); // 성능 측정 종료 시간
+    const processingTime = endTime - startTime;
+    console.log(`병합 로직 처리 시간: ${processingTime.toFixed(2)} ms`);
+
+    // 평균 시간 계산
+    mergeTimesRef.current.push(processingTime);
+    const totalMergeTime = mergeTimesRef.current.reduce((acc, t) => acc + t, 0);
+    const averageMergeTime = totalMergeTime / mergeTimesRef.current.length;
+    console.log(
+      `평균 병합 시간: ${averageMergeTime.toFixed(2)} ms (${mergeTimesRef.current.length}회)`,
+    );
+
     return Object.values(mergedMap);
   }, [isMerge, scannedItems]);
 
@@ -256,6 +272,29 @@ export default function InventorySurveyScreen() {
     }
   };
 
+  //렌더링 할 아이템 컴포넌트
+  const renderItem = ({ item, index }) => (
+    <View key={index} style={styles.card}>
+      {/* 왼쪽 아이콘 박스 */}
+      <View style={styles.cardIconBox}>
+        <Ionicons name="file-tray-full-outline" size={24} color="#4F7327" />
+      </View>
+
+      {/* 중간 텍스트 */}
+      <View style={styles.cardInfo}>
+        <Text style={styles.cardName}>{item.name}</Text>
+      </View>
+
+      {/* 오른쪽 수량 및 수정 버튼 */}
+      <View style={styles.cardRight}>
+        <View style={styles.countRow}>
+          <Text style={styles.countText}>{item.count}</Text>
+          <Text style={styles.unitText}> 개</Text>
+        </View>
+      </View>
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.container}>
       {/* 1. Header (심플한 화이트 헤더) */}
@@ -338,34 +377,13 @@ export default function InventorySurveyScreen() {
         </View>
 
         {/* 5. List Area (카드 리스트) */}
-        <ScrollView contentContainerStyle={styles.listContent}>
-          {itemsToDisplay.map((item, index) => (
-            <View key={index} style={styles.card}>
-              {/* 왼쪽 아이콘 박스 */}
-              <View style={styles.cardIconBox}>
-                <Ionicons
-                  name="file-tray-full-outline"
-                  size={24}
-                  color="#4F7327"
-                />
-              </View>
-
-              {/* 중간 텍스트 */}
-              <View style={styles.cardInfo}>
-                <Text style={styles.cardName}>{item.name}</Text>
-              </View>
-
-              {/* 오른쪽 수량 및 수정 버튼 */}
-              <View style={styles.cardRight}>
-                <View style={styles.countRow}>
-                  <Text style={styles.countText}>{item.count}</Text>
-                  <Text style={styles.unitText}> 개</Text>
-                </View>
-              </View>
-            </View>
-          ))}
-          <View style={{ height: 100 }} />
-        </ScrollView>
+        <FlatList
+          data={itemsToDisplay}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.id.toString()}
+          contentContainerStyle={styles.listContent}
+          ListFooterComponent={<View style={{ height: 100 }} />}
+        />
       </View>
 
       {/* 6. Bottom Navigation Bar (3개의 둥근 버튼) */}
