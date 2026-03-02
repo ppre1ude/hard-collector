@@ -109,6 +109,9 @@ export const useInventorySurvey = () => {
     const surveyName = fileName || getTodayDate();
 
     try {
+      {
+        /* 기존 데이터 읽기 */
+      }
       let existingSurveys = [];
       const fileInfo = await FileSystem.getInfoAsync(filePath);
       if (fileInfo.exists) {
@@ -123,6 +126,9 @@ export const useInventorySurvey = () => {
         );
       }
 
+      {
+        /* 새로운 데이터 추가 */
+      }
       const newSurvey = {
         id: originSurvey?.id || Date.now(),
         name: surveyName,
