@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { parseCsvToItems } from "../../../utils/barcodeUtils";
 
 interface Survey {
   id: number;
@@ -61,22 +62,7 @@ export default function SurveyManagementScreen() {
       const fileUri = result.assets[0].uri;
       const csvContent = await FileSystem.readAsStringAsync(fileUri);
 
-      const lines = csvContent.split("\n");
-      const items: { name: string; count: number }[] = [];
-      let dataStarted = false;
-
-      for (const line of lines) {
-        if (!dataStarted) {
-          if (line.includes("순번,항목 이름,수량")) dataStarted = true;
-          continue;
-        }
-        const parts = line.split(",");
-        if (parts.length >= 3) {
-          const name = parts[1].replace(/"/g, "").trim();
-          const count = parseInt(parts[2].trim(), 10);
-          if (name && !isNaN(count)) items.push({ name, count });
-        }
-      }
+      const items = parseCsvToItems(csvContent);
 
       if (items.length === 0) {
         Alert.alert("알림", "CSV에서 유효한 데이터를 찾을 수 없습니다.");
@@ -90,7 +76,20 @@ export default function SurveyManagementScreen() {
         items: items,
       };
 
-      setSurveys((prev) => [tempSurvey, ...prev]);
+      // 목록에 추가함과 동시에 데이터 저장 (파일 시스템)
+      const newSurveys = [tempSurvey, ...surveys];
+      const filePath = `${FileSystem.documentDirectory}Hard_Terminal`;
+      await FileSystem.writeAsStringAsync(
+        filePath,
+        JSON.stringify(newSurveys, null, 2),
+      );
+      setSurveys(newSurveys);
+
+      // 재고 조사 메인 화면으로 자동 이동
+      router.push({
+        pathname: "/StockTaking",
+        params: { survey: JSON.stringify(tempSurvey) },
+      });
     } catch (error) {
       Alert.alert("오류", "파일을 가져오는 중 문제가 발생했습니다.");
     }
@@ -191,6 +190,37 @@ export default function SurveyManagementScreen() {
                   params: { survey: JSON.stringify(survey) },
                 })
               }
+              onLongPress={(e) => {
+                e.stopPropagation();
+                Alert.prompt(
+                  "이름 변경",
+                  "새로운 파일 이름을 입력하세요",
+                  [
+                    { text: "취소", style: "cancel" },
+                    {
+                      text: "변경",
+                      onPress: async (newName) => {
+                        if (!newName || newName.trim() === "") return;
+                        const updatedSurveys = surveys.map((s) =>
+                          s.id === survey.id ? { ...s, name: newName } : s
+                        );
+                        const filePath = `${FileSystem.documentDirectory}Hard_Terminal`;
+                        try {
+                          await FileSystem.writeAsStringAsync(
+                            filePath,
+                            JSON.stringify(updatedSurveys, null, 2)
+                          );
+                          setSurveys(updatedSurveys);
+                        } catch (error) {
+                          Alert.alert("오류", "이름 변경 중 문제가 발생했습니다.");
+                        }
+                      },
+                    },
+                  ],
+                  "plain-text",
+                  survey.name
+                );
+              }}
             >
               <View style={styles.fileIconBox}>
                 <MaterialCommunityIcons

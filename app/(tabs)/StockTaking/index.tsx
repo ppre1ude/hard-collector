@@ -1,5 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
+import * as FileSystem from "expo-file-system";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import * as Sharing from "expo-sharing";
 import React, {
   useCallback,
   useEffect,
@@ -18,9 +20,9 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-// 기능 연동을 위해 필요한 라이브러리 (기존 로직 유지)
-import * as FileSystem from "expo-file-system";
-import * as Sharing from "expo-sharing";
+import { generateCsvContent, mergeItemsByName, ScannedItem } from "../../../utils/barcodeUtils";
+import { formatDateFromISO, getTodayDate } from "../../../utils/dateUtils";
+
 const { StorageAccessFramework } = FileSystem;
 
 export default function InventorySurveyScreen() {
@@ -33,10 +35,12 @@ export default function InventorySurveyScreen() {
 
   // 상단 입력값 (이미지처럼 기본값 세팅)
   const [fileName, setFileName] = useState("");
-  const [originSurvey, setOriginSurvey] = useState(null);
+  const [originDate, setOriginDate] = useState("");
+  const [originSurvey, setOriginSurvey] = useState<any>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   // 샘플 데이터 (이미지와 비슷하게 초기화)
-  const [scannedItems, setScannedItems] = useState([]);
+  const [scannedItems, setScannedItems] = useState<ScannedItem[]>([]);
   useFocusEffect(
     useCallback(() => {
       // 화면이 포커스될 때 입력 필드에 포커스
@@ -50,7 +54,12 @@ export default function InventorySurveyScreen() {
       setFileName(survey.name);
       setScannedItems(survey.items);
       setOriginSurvey(survey);
+      // 포맷된 날짜가 있다면 사용하고, 없으면 ISO string을 포맷팅해서 입력창에 넣기 위해
+      setOriginDate(formatDateFromISO(survey.date));
+    } else {
+      setOriginDate(getTodayDate());
     }
+    setHasUnsavedChanges(false);
   }, [surveyParam]);
   // --- 로직 함수들 (기존 기능 유지) ---
   // Core logic to process a barcode
@@ -64,6 +73,7 @@ export default function InventorySurveyScreen() {
       count: 1,
     };
     setScannedItems((prevItems) => [...prevItems, newItem]); // 최신 항목을 아래로
+    setHasUnsavedChanges(true);
   };
 
   // Handles scanning, clears input, and re-focuses
@@ -93,35 +103,17 @@ export default function InventorySurveyScreen() {
       return;
     }
     setScannedItems(scannedItems.slice(0, -1));
+    setHasUnsavedChanges(true);
   };
 
   // 병합 로직 (화면 표시용)
   const itemsToDisplay = useMemo(() => {
     if (!isMerge) return scannedItems;
-
-    // 이름 기준으로 병합
-    const mergedMap = {};
-    scannedItems.forEach((item) => {
-      const key = item.name; // 혹은 item.code
-      if (mergedMap[key]) {
-        mergedMap[key].count += item.count;
-      } else {
-        mergedMap[key] = { ...item };
-      }
-    });
-    return Object.values(mergedMap);
+    return mergeItemsByName(scannedItems);
   }, [isMerge, scannedItems]);
 
   const totalCount = itemsToDisplay.length;
-  const getTodayDate = () => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, "0"); // 월은 0부터 시작하므로 +1
-    const day = String(today.getDate()).padStart(2, "0");
-    const hours = String(today.getHours()).padStart(2, "0");
-    const minutes = String(today.getMinutes()).padStart(2, "0");
-    return `${year}-${month}-${day}-${hours}:${minutes}`; // YYYY-MM-DD 형식
-  };
+
   // 저장 및 내보내기 (기존 함수 틀 유지)
   const handleSave = async (callback?: () => void) => {
     if (itemsToDisplay.length === 0) {
@@ -129,63 +121,86 @@ export default function InventorySurveyScreen() {
       return;
     }
 
-    const filePath = `${FileSystem.documentDirectory}Hard_Terminal`;
-    const surveyName = fileName || getTodayDate();
-
-    try {
-      // 1. 기존 데이터 읽기
-      let existingSurveys = [];
-      const fileInfo = await FileSystem.getInfoAsync(filePath);
-      if (fileInfo.exists) {
-        const fileContent = await FileSystem.readAsStringAsync(filePath);
-        if (fileContent) {
-          existingSurveys = JSON.parse(fileContent);
-        }
-      }
-      if (originSurvey) {
-        existingSurveys = existingSurveys.filter(
-          (survey) => survey.id !== originSurvey.id,
-        );
-      }
-
-      // 2. 새 조사 데이터 객체 생성
-      const newSurvey = {
-        id: originSurvey?.id || Date.now(),
-        name: surveyName,
-        date: new Date().toISOString(),
-        items: itemsToDisplay, // 병합된 결과 저장
-      };
-
-      // 3. 새 데이터를 배열에 추가
-      existingSurveys.push(newSurvey);
-
-      // 4. 파일에 다시 쓰기 (JSON 형식, 보기 좋게)
-      await FileSystem.writeAsStringAsync(
-        filePath,
-        JSON.stringify(existingSurveys, null, 2),
-      );
-
-      Alert.alert(
-        "저장 완료",
-        `'${surveyName}' 항목이 Hard_Terminal 파일에 저장되었습니다.`,
-      );
-
-      // 5. 저장 후 상태 초기화
-      setFileName("");
-      setScannedItems([]);
-
-      // 6. (Optional) Callback after save
-      if (callback) {
-        callback();
-      }
-    } catch (error) {
-      console.error(error);
-      Alert.alert("오류", "파일 저장 중 문제가 발생했습니다.");
+    if (!hasUnsavedChanges) {
+      Alert.alert("알림", "변경된 내용이 없습니다.");
+      if (callback) callback();
+      return;
     }
+
+    const totalScanned = scannedItems.reduce((acc, item) => acc + item.count, 0);
+    const uniqueItems = itemsToDisplay.length;
+
+    Alert.alert(
+      "저장 확인",
+      `총 ${totalScanned}개의 내역을 스캔했습니다.\n병합 시 저장될 항목은 ${uniqueItems}개입니다.\n현재 상태를 저장하시겠습니까?`,
+      [
+        { text: "취소", style: "cancel" },
+        {
+          text: "저장",
+          onPress: async () => {
+            const filePath = `${FileSystem.documentDirectory}Hard_Terminal`;
+            const surveyName = fileName || getTodayDate();
+            const surveyDate = originDate || getTodayDate();
+
+            try {
+              // 1. 기존 데이터 읽기
+              let existingSurveys = [];
+              const fileInfo = await FileSystem.getInfoAsync(filePath);
+              if (fileInfo.exists) {
+                const fileContent = await FileSystem.readAsStringAsync(filePath);
+                if (fileContent) {
+                  existingSurveys = JSON.parse(fileContent);
+                }
+              }
+              if (originSurvey) {
+                existingSurveys = existingSurveys.filter(
+                  (survey) => survey.id !== originSurvey.id,
+                );
+              }
+
+              // 2. 새 조사 데이터 객체 생성
+              const newSurvey = {
+                id: originSurvey?.id || Date.now(),
+                name: surveyName,
+                date: surveyDate, // 사용자가 수정한 텍스트 반영
+                items: itemsToDisplay, // 병합된 결과 저장
+              };
+
+              // 3. 새 데이터를 배열에 추가
+              existingSurveys.push(newSurvey);
+
+              // 4. 파일에 다시 쓰기 (JSON 형식, 보기 좋게)
+              await FileSystem.writeAsStringAsync(
+                filePath,
+                JSON.stringify(existingSurveys, null, 2),
+              );
+
+              Alert.alert(
+                "저장 완료",
+                `'${surveyName}' 항목이 저장되었습니다.`,
+              );
+
+              // 5. 저장 후 상태 초기화
+              setFileName("");
+              setScannedItems([]);
+              setHasUnsavedChanges(false);
+
+              // 6. (Optional) Callback after save
+              if (callback) {
+                callback();
+              }
+            } catch (error) {
+              console.error(error);
+              Alert.alert("오류", "파일 저장 중 문제가 발생했습니다.");
+            }
+          }
+        }
+      ]
+    );
   };
 
   const handleBackPress = () => {
-    if (scannedItems.length > 0) {
+    if (hasUnsavedChanges) {
       Alert.alert(
         "저장하지 않은 변경사항",
         "변경사항을 저장하고 나가시겠습니까?",
@@ -216,25 +231,12 @@ export default function InventorySurveyScreen() {
 
     try {
       // 2. CSV 문자열 생성 (한글 깨짐 방지 BOM 추가)
-      let csvContent = "\uFEFF"; // 헤더
-      let csvName = (() => {
-        if (fileName == "") return getTodayDate();
-        else return fileName;
-      })();
-      csvContent += `파일명, ${csvName}\n`;
-      csvContent += `날짜(수정일), ${getTodayDate()}\n\n`;
-      csvContent += "순번,항목 이름,수량\n"; // 컬럼 헤더
-      let index = 1;
-      itemsToDisplay.forEach((item) => {
-        // 데이터에 쉼표(,)가 있을 경우를 대비해 따옴표로 감쌈
-        const name = `"${item.name.replace(/"/g, '""')}"`;
-        const count = item.count;
-        csvContent += `${index++},${name},${count}\n`;
-      });
+      const csvName = fileName || getTodayDate();
+      const csvContent = generateCsvContent(csvName, getTodayDate(), itemsToDisplay);
 
       // 3. 파일 경로 설정 (Cache 디렉토리 사용)
       const fileUri =
-        FileSystem.cacheDirectory + `${fileName || getTodayDate()}.csv`;
+        FileSystem.cacheDirectory + `${csvName}.csv`;
 
       // 4. 파일 쓰기
       await FileSystem.writeAsStringAsync(fileUri, csvContent, {
@@ -281,7 +283,7 @@ export default function InventorySurveyScreen() {
             <TextInput
               style={styles.infoText}
               value={fileName}
-              onChangeText={setFileName}
+              onChangeText={(text) => { setFileName(text); setHasUnsavedChanges(true); }}
               placeholder="파일명을 입력하세요"
             />
           </View>
@@ -292,9 +294,12 @@ export default function InventorySurveyScreen() {
               color="#4F7327"
               style={styles.infoIcon}
             />
-            <View style={styles.infoText}>
-              <Text>{getTodayDate()}</Text>
-            </View>
+            <TextInput
+              style={styles.infoText}
+              value={originDate}
+              onChangeText={(text) => { setOriginDate(text); setHasUnsavedChanges(true); }}
+              placeholder="날짜를 입력하세요"
+            />
           </View>
         </View>
 
