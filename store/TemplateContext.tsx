@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Template, DEFAULT_TEMPLATES } from '../types/template';
 import * as FileSystem from 'expo-file-system';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { DEFAULT_TEMPLATES, Template } from '../types/template';
 
 interface TemplateContextData {
   templates: Template[];
