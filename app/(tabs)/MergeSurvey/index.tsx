@@ -21,6 +21,16 @@ interface Survey {
 export default function MergeSurveyScreen() {
   const router = useRouter();
   const [surveys, setSurveys] = useState<Survey[]>([]);
+  const [selectedID, setSelectedID] = useState<number[]>([]);
+
+  const toggleSelect = (id: number) => {
+    if (selectedID.includes(id)) {
+      //이미 셀렉이 되어 있다면?
+      setSelectedID(selectedID.filter((selectedID) => selectedID !== id)); //목록에서 제거
+    } else {
+      setSelectedID([...selectedID, id]);
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -66,22 +76,33 @@ export default function MergeSurveyScreen() {
       {/* 2. Main (작성 필요)  */}
       <View>
         {/* File List */}
-        {surveys.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>저장된 항목이 없습니다.</Text>
-          </View>
-        ) : (
-          surveys.map((survey) => (
+        {surveys.map((survey) => {
+          // 현재 이 항목이 선택되었는지 확인
+          const isSelected = selectedID.includes(survey.id);
+
+          return (
             <TouchableOpacity
               key={survey.id}
-              style={styles.fileCard}
-              onPress={() =>
-                router.push({
-                  pathname: "/StockTaking",
-                  params: { survey: JSON.stringify(survey) },
-                })
-              }
+              // 스타일 수정: 선택되었으면 테두리색(#4F7327)을 입힘
+              style={[
+                styles.fileCard,
+                isSelected && { borderWidth: 2, borderColor: "#4F7327" },
+              ]}
+              // 클릭 시 페이지 이동 대신 선택 함수 실행
+              onPress={() => toggleSelect(survey.id)}
             >
+              {/* ... 기존 내부 코드 ... */}
+
+              {/* (추가 선택 사항) 선택되었을 때만 체크 아이콘 표시 */}
+              {isSelected && (
+                <Ionicons
+                  name="checkmark-circle"
+                  size={24}
+                  color="#4F7327"
+                  style={{ marginLeft: 10 }}
+                />
+              )}
+
               <View style={styles.fileIconBox}>
                 <MaterialCommunityIcons
                   name="file-document"
@@ -100,8 +121,8 @@ export default function MergeSurveyScreen() {
                 </Text>
               </View>
             </TouchableOpacity>
-          ))
-        )}
+          );
+        })}
       </View>
       <View style={styles.container}></View>
       {/* 3. Bottom Navigation Bar */}
