@@ -1,6 +1,8 @@
 import { colors } from "@/constants";
-import { Ionicons } from "@expo/vector-icons";
-import React from "react";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import * as FileSystem from "expo-file-system";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useState } from "react";
 import {
   SafeAreaView,
   StyleSheet,
@@ -17,14 +19,89 @@ interface Survey {
 }
 
 export default function MergeSurveyScreen() {
+  const router = useRouter();
+  const [surveys, setSurveys] = useState<Survey[]>([]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const loadSurveysFromFile = async () => {
+        const filePath = `${FileSystem.documentDirectory}Hard_Terminal`;
+        try {
+          const fileInfo = await FileSystem.getInfoAsync(filePath);
+          if (fileInfo.exists) {
+            const fileContent = await FileSystem.readAsStringAsync(filePath);
+            if (fileContent) {
+              const parsedData = JSON.parse(fileContent);
+              if (Array.isArray(parsedData)) {
+                setSurveys(parsedData);
+                return;
+              }
+            }
+          }
+          setSurveys([]);
+        } catch (error) {
+          console.error("Failed to read or parse surveys:", error);
+          setSurveys([]);
+        }
+      };
+      loadSurveysFromFile();
+    }, []),
+  );
+
   return (
     <SafeAreaView style={styles.container}>
-      {/* 1. Header (심플한 화이트 헤더) */}
+      {/* 1. Header  */}
       <View style={styles.header}>
-        <Ionicons name="chevron-back" size={28} color="#4F7327" />
+        <TouchableOpacity
+          onPress={() => {
+            router.back();
+          }}
+        >
+          <Ionicons name="chevron-back" size={28} color="#4F7327" />
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>병합할 작업 선택</Text>
         <View style={{ width: 28 }} />
         {/* 타이틀 중앙 정렬을 위한 빈 공간 */}
+      </View>
+      {/* 2. Main (작성 필요)  */}
+      <View>
+        {/* File List */}
+        {surveys.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyText}>저장된 항목이 없습니다.</Text>
+          </View>
+        ) : (
+          surveys.map((survey) => (
+            <TouchableOpacity
+              key={survey.id}
+              style={styles.fileCard}
+              onPress={() =>
+                router.push({
+                  pathname: "/StockTaking",
+                  params: { survey: JSON.stringify(survey) },
+                })
+              }
+            >
+              <View style={styles.fileIconBox}>
+                <MaterialCommunityIcons
+                  name="file-document"
+                  size={30}
+                  color="#4F7327"
+                />
+                <Text style={styles.csvBadge}>CSV</Text>
+              </View>
+              <View style={styles.fileInfo}>
+                <Text style={styles.fileName} numberOfLines={1}>
+                  {survey.name}
+                </Text>
+                <Text style={styles.fileDate}>
+                  {new Date(survey.date).toLocaleDateString()} ·{" "}
+                  {survey.items.length} 항목
+                </Text>
+              </View>
+            </TouchableOpacity>
+          ))
+        )}
       </View>
       <View style={styles.container}></View>
       {/* 3. Bottom Navigation Bar */}

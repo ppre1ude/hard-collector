@@ -15,8 +15,7 @@ export default function StartScreen() {
   const handleStart = () => {
     // 버튼을 누르면 조사 관리 화면으로 이동
     // replace를 쓰면 뒤로가기를 눌러도 다시 시작 화면으로 오지 않습니다 (일반적인 앱 방식)
-    //router.replace("/SurveyManagement");
-    router.replace("/MergeSurvey"); // 임시로 변경
+    router.replace("/SurveyManagement");
   };
 
   return (

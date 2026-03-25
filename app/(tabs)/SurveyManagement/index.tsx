@@ -222,7 +222,12 @@ export default function SurveyManagementScreen() {
         )}
 
         {/* Upload Area (Dashed Border) */}
-        <TouchableOpacity style={styles.uploadArea} onPress={handleImport}>
+        <TouchableOpacity
+          style={styles.uploadArea}
+          onPress={() => {
+            router.push("/(tabs)/MergeSurvey");
+          }}
+        >
           <View style={styles.uploadIconCircle}>
             <MaterialCommunityIcons
               name="folder-open"
