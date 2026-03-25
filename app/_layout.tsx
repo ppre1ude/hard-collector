@@ -19,7 +19,7 @@ export default function RootLayout() {
         console.log(
           `'${fileName}' not found. Creating a new file.`
         );
-        await FileSystem.writeAsStringAsync(filePath, JSON.stringify({}));
+        await FileSystem.writeAsStringAsync(filePath, JSON.stringify([]));
       } else {
         console.log(`'${fileName}' already exists.`);
       }

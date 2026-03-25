@@ -109,26 +109,33 @@ export const useInventorySurvey = () => {
     const surveyName = fileName || getTodayDate();
 
     try {
-      {
-        /* 기존 데이터 읽기 */
-      }
-      let existingSurveys = [];
+      /* 기존 데이터 읽기 */
+      let existingSurveys: any[] = [];
       const fileInfo = await FileSystem.getInfoAsync(filePath);
+      
       if (fileInfo.exists) {
-        const fileContent = await FileSystem.readAsStringAsync(filePath);
-        if (fileContent) {
-          existingSurveys = JSON.parse(fileContent);
+        try {
+          const fileContent = await FileSystem.readAsStringAsync(filePath);
+          if (fileContent) {
+            const parsedData = JSON.parse(fileContent);
+            if (Array.isArray(parsedData)) {
+              existingSurveys = parsedData;
+            }
+          }
+        } catch (parseError) {
+          console.error("파일 파싱 중 오류 발생:", parseError);
+          // 파싱 오류 시 빈 배열로 시작 (파일이 손상되었을 수 있음)
+          existingSurveys = [];
         }
       }
-      if (originSurvey) {
+
+      if (originSurvey && Array.isArray(existingSurveys)) {
         existingSurveys = existingSurveys.filter(
           (survey: any) => survey.id !== originSurvey.id,
         );
       }
 
-      {
-        /* 새로운 데이터 추가 */
-      }
+      /* 새로운 데이터 추가 */
       const newSurvey = {
         id: originSurvey?.id || Date.now(),
         name: surveyName,
@@ -136,7 +143,11 @@ export const useInventorySurvey = () => {
         items: itemsToDisplay,
       };
 
-      existingSurveys.push(newSurvey);
+      if (Array.isArray(existingSurveys)) {
+        existingSurveys.push(newSurvey);
+      } else {
+        existingSurveys = [newSurvey];
+      }
 
       await FileSystem.writeAsStringAsync(
         filePath,
