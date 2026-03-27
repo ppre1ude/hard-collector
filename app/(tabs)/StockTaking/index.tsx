@@ -64,7 +64,7 @@ export default function InventorySurveyScreen() {
             <TextInput
               style={styles.infoText}
               value={fileName}
-              onChangeText={(text) => { setFileName(text); setHasUnsavedChanges(true); }}
+              onChangeText={setFileName}
               placeholder="파일명을 입력하세요"
             />
           </View>
@@ -75,12 +75,9 @@ export default function InventorySurveyScreen() {
               color="#4F7327"
               style={styles.infoIcon}
             />
-            <TextInput
-              style={styles.infoText}
-              value={originDate}
-              onChangeText={(text) => { setOriginDate(text); setHasUnsavedChanges(true); }}
-              placeholder="날짜를 입력하세요"
-            />
+            <View style={styles.infoText}>
+              <Text>{getTodayDate()}</Text>
+            </View>
           </View>
         </View>
 
