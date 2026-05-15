@@ -1,4 +1,5 @@
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+// @ts-ignore
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -245,7 +246,23 @@ export default function SurveyManagementScreen() {
       {/* FAB */}
       <TouchableOpacity
         style={styles.fab}
-        onPress={() => router.push("/StockTaking")}
+        onPress={() => {
+          Alert.alert(
+            "템플릿 사용",
+            "작업에 템플릿을 사용하시겠습니까?\n'예'를 누르면 항목(담당자, 상태 등)을 추가할 수 있습니다.",
+            [
+              {
+                text: "아니요",
+                style: "cancel",
+                onPress: () => router.push("/StockTaking"),
+              },
+              {
+                text: "예",
+                onPress: () => router.push("/TemplateBrowse" as any),
+              },
+            ]
+          );
+        }}
       >
         <Ionicons name="add" size={32} color="white" />
       </TouchableOpacity>

@@ -3,6 +3,7 @@ import { Stack } from "expo-router";
 import "react-native-reanimated";
 import { useEffect } from "react";
 import * as FileSystem from "expo-file-system";
+import { TemplateProvider } from "../store/TemplateContext";
 
 export default function RootLayout() {
   const [loaded] = useFonts({
@@ -36,9 +37,11 @@ export default function RootLayout() {
   }
 
   return (
-    <Stack>
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="+not-found" />
-    </Stack>
+    <TemplateProvider>
+      <Stack>
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="+not-found" />
+      </Stack>
+    </TemplateProvider>
   );
 }
